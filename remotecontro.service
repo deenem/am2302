@@ -1,0 +1,15 @@
+[Unit]
+Description=Remote Control to MQTT Service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/pifacedigitalio/examples/relaycontrol.py &
+Restart=always
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=RemoteControl
+User=pi
+
+[Install]
+WantedBy=multi-user.target
