@@ -16,13 +16,13 @@ Read Temp and Humidity from DHT22 sensor and publish to an MQTT broker
 DHT dht(DHTPIN, DHTTYPE);
 
 // Replace the next variables with your SSID/Password combination
-const char* ssid = "47 Ivy Road C";
-const char* password = "7UjmnhY6";
+const char* ssid = "<Wifi AP>;
+const char* password = "<Wifi Pwd>";
 
 // Add your MQTT Broker IP address, example:
 const char* mqtt_server = "10.0.1.45";
-const char* mqtt_user = "inverter";
-const char* mqtt_pwd = "inverter";
+const char* mqtt_user = "<mqtt user>";
+const char* mqtt_pwd = "<mqtt pwd>";
 
 const String client_id = "esp32_client";
 const String sub_topic = client_id + String("/output"); 
