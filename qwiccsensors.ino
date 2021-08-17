@@ -8,11 +8,21 @@
 #include <Wire.h>
 #include <SPI.h>
 
+#define ALT_FT 5400.00 // Altitude in feet for HPA adjustment
+
+//#define SSD1306 
+
 #include <Adafruit_LPS2X.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_HTS221.h>
 #include <Adafruit_GFX.h>
+
+
+// Include SSD1306 code
+#ifdef SSD1306 
 #include <Adafruit_SSD1306.h>
+#endif
+
 #include <Adafruit_VCNL4040.h>
 
 #include <PubSubClient.h>
@@ -22,6 +32,7 @@
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
+#ifdef SSD1306 
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 // The pins for I2C are defined by the Wire-library. 
 // On an arduino UNO:       A4(SDA), A5(SCL)
@@ -30,13 +41,14 @@
 #define OLED_RESET     4 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#endif
 
 Adafruit_LPS22 lps;
 Adafruit_VCNL4040 vcnl4040 = Adafruit_VCNL4040();
 Adafruit_HTS221 hts;
 
-const char* ssid = "47 Ivy Road C";
-const char* password = "7UjmnhY6";
+const char* ssid = "...";
+const char* password = "...";
 
 #define DISP_LINES 8
 #define LINE_LEN 30
@@ -47,10 +59,10 @@ char buffer[DISP_LINES][LINE_LEN+1];
 // Add your MQTT Broker IP address, example:
 const char* mqtt_server = "10.0.1.45";
 const char* mqtt_user = "inverter";
-const char* mqtt_pwd = "inverter";
-const char* mqtt_client_name = "adafruit_esp32_thing";
+const char* mqtt_pwd = "...";
+const char* mqtt_client_name = "adafruit_esp32_thing_1";
 const String mqtt_topic_prefix = "adafruit/thing/";
-const String device_name = "Qwicc Sensors";
+const String device_name = "Qwicc Box";
 const String device_manf = "Adafruit";
 const String device_model = "ESP32 Thing Plus";
 const String sub_topic = mqtt_topic_prefix + String("/output"); 
@@ -92,7 +104,7 @@ void setup_OTA()
     delay(5000);
     ESP.restart();
   }
-
+  
   // Port defaults to 3232
   // ArduinoOTA.setPort(3232);
 
@@ -245,6 +257,7 @@ void setup_HTS221(void) {
 
 }
 
+#ifdef SSD1306
 void setup_SSD1306() {
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
@@ -258,8 +271,12 @@ void setup_SSD1306() {
 
   // Clear the buffer
   display.clearDisplay();
-  
+
+  snprintf (buffer[iLineCnt++], LINE_LEN, "Hello");
+  snprintf (buffer[iLineCnt++], LINE_LEN, "World");
 }
+#endif
+
 
 void callback(char* topic, byte* message, unsigned int length) {
   Serial.print("Message arrived on topic: ");
@@ -282,6 +299,7 @@ void callback(char* topic, byte* message, unsigned int length) {
 void setup_MQTT() {
    client.setServer(mqtt_server, 1883);
    client.setCallback(callback);
+   client.setBufferSize(512);
 }
 void setup() {
 
@@ -295,7 +313,9 @@ void setup() {
   setup_VCNL4404();
   setup_LPS22();
   setup_HTS221();
+#ifdef SSD1306
   setup_SSD1306();
+#endif
 }
 
 
@@ -325,7 +345,7 @@ void loop_LPS22() {
   snprintf (buffer[iLineCnt++], LINE_LEN, "%5s : %.2f C", "Temp", temp.temperature);
   snprintf (buffer[iLineCnt++], LINE_LEN, "%5s : %.2f nPa", "Pres", pressure.pressure);
 
-  sensor[PRES_2].value = pressure.pressure;
+  sensor[PRES_2].value = pressure.pressure + (ALT_FT / 30.0);
 
   delay(100);
 }
@@ -343,6 +363,7 @@ void loop_HTS221() {
 }
 
 
+#ifdef SSD1306
 void loop_SSD1306(){
   display.clearDisplay();
   display.setTextSize(1);      // Normal 1:1 pixel scale
@@ -357,6 +378,7 @@ void loop_SSD1306(){
   }
   display.display();
 }
+#endif
 
 void publish_discovery() {
 
@@ -372,20 +394,23 @@ void publish_discovery() {
       doc["name"] = sensor[i].name;
       if (sensor[i].device_class != 0) doc["dev_cla"] = sensor[i].device_class;
       doc["unit_of_meas"] = sensor[i].u_o_m;
+      doc["state_class"] = "measurement";
+      
       doc["stat_t"] = stateTopic.c_str();
 
       JsonObject device  = doc.createNestedObject("dev");
       device["name"] = device_name;
       device["ids"][0] = WiFi.macAddress();
       
-      //device["mf"] = device_manf;
-      //device["mdl"] = device_model;
+      device["mf"] = device_manf;
+      device["mdl"] = device_model;
       
       String output;
       serializeJson(doc, output);
 
       Serial.print("Discovery...\n");
       Serial.print(discoveryTopic.c_str());
+      Serial.print("\n");
       Serial.print(output.c_str());
       Serial.print("\n");
       
@@ -395,6 +420,7 @@ void publish_discovery() {
 
 void reconnect() {
   // Loop until we're reconnected
+  delay(5000);
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
@@ -420,7 +446,6 @@ void loop_MQTT() {
     reconnect();
   }
   client.loop();
-
   for (int i = 0; i < NUM_SENSORS; ++i) {
       if (!isnan(sensor[i].value)) {
         String stateTopic = mqtt_topic_prefix + String(sensor[i].state_topic);
@@ -437,9 +462,12 @@ void loop() {
   loop_VCNL4040();
   loop_LPS22();
   loop_HTS221();
+  
+#ifdef SSD1306
   loop_SSD1306();
+#endif
+
   loop_MQTT();
   delay(5000);
-
   
 }
